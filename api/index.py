@@ -5,7 +5,12 @@ import bot
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")
+# Prend TELEGRAM_TOKEN ou TOKEN (pour éviter l'erreur)
+TOKEN = (os.getenv("TELEGRAM_TOKEN") or os.getenv("TOKEN") or os.getenv("BOT_TOKEN") or "").strip()
+
+if not TOKEN:
+    raise ValueError("TOKEN vide ! Va dans Vercel > Settings > Environment Variables")
+
 application = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
