@@ -19,7 +19,6 @@ def w():
         if not chat: return "ok",200
 
         if not BOT:
-            requests.post(f"https://api.telegram.org/bot{os.getenv('BOT_TOKEN')}/sendMessage", json={"chat_id":chat,"text":"ERREUR: BOT_TOKEN vide sur Vercel"})
             return "ok",200
 
         if txt == "/start":
@@ -27,13 +26,30 @@ def w():
         else:
             try:
                 r = requests.post("https://api.groq.com/openai/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {KEY}"},
-                    json={"model":"llama-3.1-8b-instant","messages":[{"role":"user","content":txt}],"max_tokens":300}, timeout=10)
-                rep = r.json()["choices"][0]["message"]["content"]
+                    headers={"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"},
+                    json={
+                        "model":"llama-3.3-70b-versatile",
+                        "messages":[
+                            {"role":"system","content":"Tu es Ocup-Killer v7, expert pari sportif concis."},
+                            {"role":"user","content":f"Analyse match: {txt}. Donne prono 1X2, BTTS, Over 2.5 et score."}
+                        ],
+                        "max_tokens":400,
+                        "temperature":0.7
+                    }, timeout=15)
+
+                j = r.json()
+                if "choices" in j:
+                    rep = j["choices"][0]["message"]["content"]
+                else:
+                    # On affiche la vraie erreur Groq
+                    rep = f"Groq a répondu: {j}"
+                    print(f"ERREUR GROQ FULL: {j}")
+
             except Exception as e:
                 rep = f"Erreur Groq: {e} | KEY ok:{bool(KEY)}"
+                print(f"EXCEPTION GROQ: {e}")
 
-        requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", json={"chat_id":chat,"text":rep}, timeout=5)
+        requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", json={"chat_id":chat,"text":rep}, timeout=10)
     except Exception as e:
         print(f"CRASH TOTAL: {e}")
     return "ok",200
