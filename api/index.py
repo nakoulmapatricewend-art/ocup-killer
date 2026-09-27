@@ -17,39 +17,34 @@ def w():
         chat = (msg.get("chat") or {}).get("id")
         txt = (msg.get("text") or "").strip()
         if not chat: return "ok",200
-
-        if not BOT:
-            return "ok",200
+        if not BOT: return "ok",200
 
         if txt == "/start":
-            rep = "🤖 Ocup-Killer v7 ONLINE\nEnvoie un match: Real vs Barca"
+            rep = "🤖 Ocup-Killer v7 ONLINE\nEnvoie un match: Burkina vs RCA"
         else:
             try:
                 r = requests.post("https://api.groq.com/openai/v1/chat/completions",
                     headers={"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"},
                     json={
-                        "model":"llama-3.3-70b-versatile",
-                        "messages":[
-                            {"role":"system","content":"Tu es Ocup-Killer v7, expert pari sportif concis."},
-                            {"role":"user","content":f"Analyse match: {txt}. Donne prono 1X2, BTTS, Over 2.5 et score."}
+                        "model": "openai/gpt-oss-20b",
+                        "messages": [
+                            {"role": "system", "content": "Tu es Ocup-Killer v7, expert pari sportif. Donne prono court 1X2, BTTS, Over 2.5 et score."},
+                            {"role": "user", "content": f"Analyse: {txt}"}
                         ],
-                        "max_tokens":400,
-                        "temperature":0.7
+                        "max_tokens": 400,
+                        "temperature": 0.7
                     }, timeout=15)
-
                 j = r.json()
                 if "choices" in j:
                     rep = j["choices"][0]["message"]["content"]
                 else:
-                    # On affiche la vraie erreur Groq
-                    rep = f"Groq a répondu: {j}"
-                    print(f"ERREUR GROQ FULL: {j}")
-
+                    rep = f"Groq dit: {j}"
+                    print(f"FULL GROQ ERROR: {j}")
             except Exception as e:
-                rep = f"Erreur Groq: {e} | KEY ok:{bool(KEY)}"
-                print(f"EXCEPTION GROQ: {e}")
+                rep = f"Erreur Groq: {e}"
+                print(f"EXCEPTION: {e}")
 
-        requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", json={"chat_id":chat,"text":rep}, timeout=10)
+        requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", json={"chat_id": chat, "text": rep}, timeout=10)
     except Exception as e:
-        print(f"CRASH TOTAL: {e}")
+        print(f"CRASH: {e}")
     return "ok",200
