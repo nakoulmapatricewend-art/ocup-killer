@@ -9,7 +9,7 @@ def w():
     KEY = os.getenv("GROQ_API_KEY")
 
     if request.method == "GET":
-        return f"v7 OK - BOT exists:{bool(BOT)} - GROQ exists:{bool(KEY)}", 200
+        return f"v7 PRO OK - BOT:{bool(BOT)} - GROQ:{bool(KEY)}", 200
 
     try:
         data = request.get_json(force=True, silent=True) or {}
@@ -20,29 +20,46 @@ def w():
         if not BOT: return "ok",200
 
         if txt == "/start":
-            rep = "🤖 Ocup-Killer v7 ONLINE\nEnvoie un match: Burkina vs RCA"
+            rep = "🤖 Ocup-Killer v7 ONLINE\nEnvoie un match: ex: Burkina vs RCA"
         else:
             try:
+                prompt_system = """Tu es Ocup-Killer V7, expert pari sportif Burkinabé.
+Règles OBLIGATOIRES:
+- Réponds TOUJOURS en français
+- JAMAIS de ** ou de tableau markdown |
+- Utilise exactement ce format avec emojis:
+
+🤖 OCUP-KILLER V7
+⚽ MATCH: [Equipe A vs Equipe B]
+📊 PRONO:
+✅ Victoire: [nom]
+✅ BTTS: Oui/Non
+✅ Over 2.5: Oui/Non
+✅ Score exact: [ex: 2-0]
+
+Mini-analyse:
+2 phrases max, style Etalons, direct.
+"""
+
                 r = requests.post("https://api.groq.com/openai/v1/chat/completions",
                     headers={"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"},
                     json={
                         "model": "openai/gpt-oss-20b",
                         "messages": [
-                            {"role": "system", "content": "Tu es Ocup-Killer v7, expert pari sportif. Donne prono court 1X2, BTTS, Over 2.5 et score."},
-                            {"role": "user", "content": f"Analyse: {txt}"}
+                            {"role": "system", "content": prompt_system},
+                            {"role": "user", "content": f"Match à analyser: {txt}"}
                         ],
-                        "max_tokens": 400,
-                        "temperature": 0.7
+                        "max_tokens": 350,
+                        "temperature": 0.6
                     }, timeout=15)
+
                 j = r.json()
                 if "choices" in j:
                     rep = j["choices"][0]["message"]["content"]
                 else:
                     rep = f"Groq dit: {j}"
-                    print(f"FULL GROQ ERROR: {j}")
             except Exception as e:
-                rep = f"Erreur Groq: {e}"
-                print(f"EXCEPTION: {e}")
+                rep = f"Erreur: {e}"
 
         requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage", json={"chat_id": chat, "text": rep}, timeout=10)
     except Exception as e:
