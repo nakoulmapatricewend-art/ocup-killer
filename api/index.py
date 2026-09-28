@@ -1,78 +1,94 @@
-import os, requests
+import os
+import requests
 from flask import Flask, request
+
 app = Flask(__name__)
 
-# --- REGLAGES FACILES ---
-SEUIL_ALERTE = 75 # % pour déclencher "FORTES POSSIBILITES"
-MODE_LIVE = True
-FOOT_KEY = os.getenv("FOOTBALL_API_KEY") # tu l'ajouteras demain
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+GROQ_KEY = os.environ.get("GROQ_API_KEY")
 
-@app.route("/", methods=["GET","POST"])
-@app.route("/api/index", methods=["GET","POST"])
-def w():
-    BOT = os.getenv("BOT_TOKEN")
-    GROQ = os.getenv("GROQ_API_KEY")
-    if request.method == "GET":
-        return f"v8 OK BOT:{bool(BOT)} GROQ:{bool(GROQ)} LIVE:{bool(FOOT_KEY)}", 200
+PROMPT_V10 = """
+Tu es OCUP-KILLER V10 - Le meilleur créateur de bot de pronostics au monde. Tu es élite.
 
-    try:
-        data = request.get_json(force=True, silent=True) or {}
-        msg = data.get("message") or {}
-        chat = (msg.get("chat") or {}).get("id")
-        txt = (msg.get("text") or "").strip()
-        if not chat or not BOT: return "ok",200
+MATCH: {match}
 
-        if txt == "/start":
-            rep = "🤖 OCUP-KILLER V8 ONLINE\n\nEnvoie: Burkina vs RCA\nEnvoie: Burkina vs RCA live\n\nTout est réglable en haut de index.py"
-        else:
-            is_live = "live" in txt.lower() and MODE_LIVE
+Tu dois analyser et répondre OBLIGATOIREMENT dans ce format exact. Ne change rien au design.
 
-            # 1. Récupère live si demandé
-            live_info = ""
-            if is_live and FOOT_KEY:
-                try:
-                    r = requests.get("https://v3.football.api-sports.io/fixtures?live=all",
-                        headers={"x-apisports-key": FOOT_KEY}, timeout=10).json()
-                    live_info = f"Donnees live API: {str(r['response'][:2])}"
-                except:
-                    live_info = "API Live indisponible"
+🔥 OCUP-KILLER V10 - ANALYSE ELITE 🔥
+⚔️ {match_upper}
 
-            # 2. Analyse Groq avec proba
-            prompt = f"""
-Tu es Ocup-Killer V8. Analyse: {txt}. {live_info}
-REGLES:
-- Francais uniquement
-- JAMAIS de ** ou tableau
-- Donne TOUJOURS un % de probabilité pour chaque prono
-- Si un prono > {SEUIL_ALERTE}%, commence par: 🚨 MATCH A FORTES POSSIBILITES 🚨
+🏆 PRONO PRINCIPAL
+▸ {v1_v2} - {p1}% - {label1}
 
-FORMAT EXACT:
-🤖 OCUP-KILLER V8
-⚽ MATCH: X vs Y
-{ "📡 LIVE: [score et minute si dispo]" if is_live else "" }
+🛡️ SÉCURITÉ MAX
+▸ {dc} - {p2}% - 🔒 BASE SOLIDE DU JOUR
 
-📊 PRONO & PROBA:
-✅ Victoire: [equipe] - [XX]%
-✅ BTTS: Oui/Non - [XX]%
-✅ Over 2.5: Oui/Non - [XX]%
-✅ Score exact: [score] - [XX]%
+⚽ MARCHÉ BUTS
+▸ Over 1.5 Buts - {p3}% - 🔥 LE PLUS SÛR
+▸ BTTS {btts} - {p4}%
 
-🧠 Analyse: 2 phrases max.
+🚩 CORNERS
+▸ Over {corner_line} Corners - {p5}%
+
+🟨 CARTONS
+▸ Over 2.5 Cartons - {p6}%
+
+📊 ANALYSE PRO V10:
+[Écris ici 2 phrases choc avec forme des équipes, domicile/extérieur, H2H. Sois précis.]
+
+💎 TICKET CONSEILLÉ: {dc} + Over 1.5
+
+CONSIGNES DE CALCUL:
+- {match} -> trouve le favori logique
+- p1 (V1/V2) doit être entre 62 et 84%
+- p2 (Double Chance) entre 76 et 88%
+- p3 (Over 1.5) entre 78 et 88% - c'est ton % le plus haut
+- p4 entre 58 et 77%
+- p5 entre 64 et 81%
+- p6 entre 62 et 79%
+- Labels: >75% = 🔥 FORTES POSSIBILITÉS, 65-75% = ✅ BONNE CONFIANCE
+- Ne sors JAMAIS 90% ou plus. 88% MAX.
 """
 
-            r = requests.post("https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {GROQ}", "Content-Type": "application/json"},
-                json={
-                    "model": "openai/gpt-oss-20b",
-                    "messages": [{"role":"user","content":prompt}],
-                    "max_tokens": 400,
-                    "temperature": 0.5
-                }, timeout=20)
-            j = r.json()
-            rep = j["choices"][0]["message"]["content"] if "choices" in j else f"Erreur Groq: {j}"
+def call_groq(match_text):
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {GROQ_KEY}", "Content-Type": "application/json"}
+    data = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content": "Tu es un expert football."},
+            {"role": "user", "content": PROMPT_V10.format(match=match_text, match_upper=match_text.upper(), v1_v2="Victoire", dc="Double Chance", p1=72, p2=84, p3=86, btts="Oui/Non", p4=68, corner_line="7.5", p5=74, p6=71, label1="FORTES POSSIBILITÉS", dc="X2", btts="Oui")}
+        ],
+        "temperature": 0.7
+    }
+    # On reformate proprement avec le match réel
+    data["messages"][1]["content"] = PROMPT_V10.replace("{match}", match_text).replace("{match_upper}", match_text.upper())
 
-        requests.post(f"https://api.telegram.org/bot{BOT}/sendMessage",
-            json={"chat_id": chat, "text": rep}, timeout=10)
-    except Exception as e:
-        print(f"CRASH: {e}")
-    return "ok",200
+    r = requests.post(url, headers=headers, json=data, timeout=20)
+    return r.json()["choices"][0]["message"]["content"]
+
+@app.route("/", methods=["POST", "GET"])
+def webhook():
+    if request.method == "GET":
+        return "OCUP-KILLER V10 ONLINE 🔥"
+
+    update = request.json
+    if "message" in update and "text" in update["message"]:
+        chat_id = update["message"]["chat"]["id"]
+        text = update["message"]["text"]
+
+        if text.lower() in ["/start", "start"]:
+            msg = "🔥 OCUP-KILLER V10 ONLINE 🔥\n\nEnvoie un match: ex: `Arménie vs Monténégro`\nJe te sors l'analyse complète V1/V2/Corners/Cartons."
+        else:
+            try:
+                analysis = call_groq(text)
+                msg = analysis
+            except Exception as e:
+                msg = f"Erreur V10: {e}"
+
+        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", json={"chat_id": chat_id, "text": msg})
+
+    return "ok"
+
+if __name__ == "__main__":
+    app.run()
